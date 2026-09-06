@@ -4,8 +4,8 @@
   // ---------- 配置 ----------
   const CONFIG = {
     PANEL_ID: 'x-article-outline-panel',
-    // 一级章节：优先语义类，兜底文本启发式
-    HEADER_CLASS_SELECTOR: '[class*="longform-header-two"]',
+    // 一级章节：优先语义类（支持多级 longform-header-one/two/three），兜底文本启发式
+    HEADER_CLASS_SELECTOR: '[class*="longform-header"]',
     FALLBACK_BLOCK_SELECTOR: '[class*="longform-unstyled"]',
     // 中文序数 / 数字序号 / 常见结语词（仅用于兜底识别，限制短文本降低误报）
     FALLBACK_TITLE_RE: /^(一|二|三|四|五|六|七|八|九|十|十一|十二|十三|十四|十五)[、.．:：\s]|^第[一二三四五六七八九十百\d]+[章节部分][、.．:：\s]|^\d{1,2}[、.．]\s*\S|^(写在最后|结语|总结|写在前面|写在开篇|后记|尾声)[:：\s]?/,
@@ -403,9 +403,14 @@
       sections.push({ text: t, el, level });
     };
 
-    // 方式 1：语义标题（作者用了「标题」格式）
+    // 方式 1：语义标题（支持多级：longform-header-one → 一级，-two → 二级，-three → 三级）
     rich.querySelectorAll(CONFIG.HEADER_CLASS_SELECTOR).forEach((h) => {
-      push(h.innerText, h, 1);
+      const cls = (h.className || '').toString();
+      let level = 1;
+      if (cls.includes('longform-header-three')) level = 3;
+      else if (cls.includes('longform-header-two')) level = 2;
+      else if (cls.includes('longform-header-one')) level = 1;
+      push(h.innerText, h, level);
     });
 
     // 方式 2：兜底 —— 无语义标题时，用中文序数/数字/结语词启发式
@@ -509,6 +514,9 @@
       font-family: inherit;
     }
     #${CONFIG.PANEL_ID} .xao-item:hover { background: rgba(0,0,0,0.05); color: rgb(15,20,25); }
+    #${CONFIG.PANEL_ID} .xao-item[data-level="1"] { color: rgb(15,20,25); font-weight: 700; }
+    #${CONFIG.PANEL_ID} .xao-item[data-level="2"] { padding-left: 20px; }
+    #${CONFIG.PANEL_ID} .xao-item[data-level="3"] { padding-left: 30px; font-size: 13px; }
     #${CONFIG.PANEL_ID} .xao-item.xao-active {
       color: rgb(15,20,25);
       font-size: 16px;
@@ -517,6 +525,7 @@
     @media (prefers-color-scheme: dark) {
       #${CONFIG.PANEL_ID} .xao-item:hover { background: rgba(255,255,255,0.08); color: rgb(231,233,234); }
       #${CONFIG.PANEL_ID} .xao-item.xao-active { color: rgb(231,233,234); font-size: 16px; font-weight: 800; }
+      #${CONFIG.PANEL_ID} .xao-item[data-level="1"] { color: rgb(231,233,234); }
     }
     #${CONFIG.PANEL_ID} .xao-credit-row {
       display: flex;
@@ -580,7 +589,7 @@
     if (meta.sections.length) {
       html += '<div class="xao-list">';
       meta.sections.forEach((s, i) => {
-        html += `<button type="button" class="xao-item" data-idx="${i}">${escapeHtml(s.text)}</button>`;
+        html += `<button type="button" class="xao-item" data-level="${s.level || 1}" data-idx="${i}">${escapeHtml(s.text)}</button>`;
       });
       html += creditHtml;
       html += '</div>';
