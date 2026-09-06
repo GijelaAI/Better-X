@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-X
 // @namespace    https://github.com/gijela
-// @version      0.1.63
+// @version      0.1.64
 // @description  X 平台增强工具箱：长文大纲、隐藏「有什么新鲜事」、左导航折叠 + 正文加宽，更多能力持续加入。
 // @author       m2 bot
 // @match        https://x.com/*

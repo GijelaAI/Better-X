@@ -226,11 +226,11 @@
       // 文章实体视图：垂直居中
       const aev = document.querySelector('[data-testid="articleEntityView"]');
       if (aev) aev.style.alignItems = 'center';
-      // 文章阅读视图：自适应宽度
+      // 文章阅读视图：自适应宽度（!important 覆盖折叠样式的 657px 限宽）
       const tav = document.querySelector('[data-testid="twitterArticleReadView"]');
       if (tav) {
-        tav.style.maxWidth = 'unset';
-        tav.style.width = 'unset';
+        tav.style.setProperty('max-width', 'unset', 'important');
+        tav.style.setProperty('width', 'unset', 'important');
       }
       // 某个布局元素：横向反排
       const rev = document.querySelector('[class="css-g5y9jx r-1pz39u2 r-13awgt0 r-18u37iz r-1xnzce8 r-1p0dtai r-1d2f490 r-u8s1d r-zchlnj r-ipm5af"]');
