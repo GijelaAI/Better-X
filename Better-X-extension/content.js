@@ -222,6 +222,12 @@
       // 样式工具栏：#toolbar-styling-buttons 居中
       const toolbar = document.getElementById('toolbar-styling-buttons');
       if (toolbar) toolbar.style.justifyContent = 'center';
+      // 文章实体视图：垂直居中
+      const aev = document.querySelector('[data-testid="articleEntityView"]');
+      if (aev) aev.style.alignItems = 'center';
+      // 文章阅读视图：限宽 1280
+      const tav = document.querySelector('[data-testid="twitterArticleReadView"]');
+      if (tav) tav.style.maxWidth = '1280px';
     } else if (savedComposeHeaderClass || savedComposeNavClass) {
       // 仅当进过 compose 页（有改动痕迹）才恢复，避免在普通页面无条件清 main width / 动 header
       if (header) {
@@ -689,6 +695,10 @@
       // 长文创作页专属处理（无 sidebar，独立于侧边栏逻辑；含 /compose/articles 下所有子页面）
       if (location.pathname.startsWith('/compose/articles')) {
         applyComposeLayout(true);
+        // compose 页也需要侧边栏能力：折叠布局 + 贴左 + 折叠按钮
+        applyArticleLayout(navCollapsed);
+        setNavSnug(true);
+        syncCollapseBtn();
         return;
       }
       applyComposeLayout(false);
