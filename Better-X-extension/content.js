@@ -203,6 +203,18 @@
       }
       const main = document.querySelector('main');
       if (main && main.firstElementChild) main.firstElementChild.style.width = '100%';
+      // 板块导航区（仅创作页）：root-header 限宽 375，detail-header flex 伸展
+      const rootH = document.querySelector('[aria-labelledby="root-header"]');
+      if (rootH) {
+        rootH.style.margin = '0';
+        rootH.style.maxWidth = '375px';
+      }
+      const detailH = document.querySelector('[aria-labelledby="detail-header"]');
+      if (detailH) {
+        detailH.style.margin = '0';
+        detailH.style.flex = '1';
+        detailH.style.maxWidth = 'unset';
+      }
     } else if (savedComposeHeaderClass || savedComposeNavClass) {
       // 仅当进过 compose 页（有改动痕迹）才恢复，避免在普通页面无条件清 main width / 动 header
       if (header) {
@@ -255,29 +267,12 @@
     });
   }
 
-  // 板块导航元素：margin 0 + max-width 375px（仅 r-th6na 精确定位，避免误伤时间线等其他含 r-f8sm7e 的元素）
-  function styleNavSection() {
-    document.querySelectorAll('[class~="r-th6na"]').forEach((el) => {
-      el.style.margin = '0';
-      el.style.maxWidth = '375px';
-    });
-  }
-
   // 撤销历史误伤：之前用通用选择器把非板块导航的 r-f8sm7e+r-13qz1uu 元素（如主页时间线/文章页元素）设成了 375px，这里恢复原样
   function undoNavSectionMiss() {
     document.querySelectorAll('[class~="r-f8sm7e"][class~="r-13qz1uu"]').forEach((el) => {
       if (el.classList.contains('r-th6na') || el.classList.contains('r-z7pwl0')) return;
       if (el.style.maxWidth === '375px') el.style.maxWidth = '';
       if (el.style.margin === '0') el.style.margin = '';
-    });
-  }
-
-  // 板块导航相邻元素：margin 0 + flex 1 + max-width unset（含 r-z7pwl0）
-  function styleNavSibling() {
-    document.querySelectorAll('[class~="r-z7pwl0"]').forEach((el) => {
-      el.style.margin = '0';
-      el.style.flex = '1';
-      el.style.maxWidth = 'unset';
     });
   }
 
@@ -706,8 +701,6 @@
       // 侧边栏修改全局生效（所有桌面 X 页面）：贴左 + 折叠图标 + 折叠能力 + 主栏调整
       applyPrimaryColumn();
       stripYe8kvj();
-      styleNavSection();
-      styleNavSibling();
       undoNavSectionMiss();
       applyArticleLayout(navCollapsed);
       setNavSnug(true);
