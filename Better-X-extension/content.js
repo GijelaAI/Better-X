@@ -247,14 +247,16 @@
     }
   }
 
-  // compose 页 root-header 折叠图标：放在 root-header 同级右侧（root-header 隐藏时图标仍可见），点击切换显隐（幂等）
+  // compose 页 root-header 折叠图标：放在 root-header 同级右侧（root-header 隐藏时图标仍可见），点击切换显隐（幂等，只保留一个）
   function ensureComposeFold(rootH) {
-    let foldBtn = rootH.querySelector('.xao-compose-fold');
-    if (foldBtn && foldBtn.isConnected) return;
+    // 幂等检查：root-header 同级是否已存在折叠按钮（按钮在 root-header 外侧，不能查内部）
+    if (rootH.parentNode && [...rootH.parentNode.children].some((c) => c.classList && c.classList.contains('xao-compose-fold'))) {
+      return;
+    }
     const moreBtn = rootH.querySelector('button[aria-label="更多"]');
     const moreWrap = moreBtn ? moreBtn.parentElement : null;
     if (!moreWrap) return;
-    foldBtn = document.createElement('button');
+    const foldBtn = document.createElement('button');
     foldBtn.type = 'button';
     foldBtn.className = 'xao-compose-fold';
     foldBtn.title = '折叠/展开';
