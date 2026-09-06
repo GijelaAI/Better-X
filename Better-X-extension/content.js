@@ -207,7 +207,7 @@
       const rootH = document.querySelector('[aria-labelledby="root-header"]');
       if (rootH) {
         rootH.style.margin = '0';
-        rootH.style.maxWidth = '275px';
+        rootH.style.maxWidth = '350px';
         ensureComposeFold(rootH); // 「更多」同级右侧加折叠图标，切换 root-header 显隐
       }
       const detailH = document.querySelector('[aria-labelledby="detail-header"]');
