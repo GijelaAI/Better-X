@@ -228,6 +228,9 @@
       // 文章阅读视图：限宽 1280
       const tav = document.querySelector('[data-testid="twitterArticleReadView"]');
       if (tav) tav.style.maxWidth = '1280px';
+      // 某个布局元素：横向反排
+      const rev = document.querySelector('[class="css-g5y9jx r-1pz39u2 r-13awgt0 r-18u37iz r-1xnzce8 r-1p0dtai r-1d2f490 r-u8s1d r-zchlnj r-ipm5af"]');
+      if (rev) rev.style.flexDirection = 'row-reverse';
     } else if (savedComposeHeaderClass || savedComposeNavClass) {
       // 仅当进过 compose 页（有改动痕迹）才恢复，避免在普通页面无条件清 main width / 动 header
       if (header) {
