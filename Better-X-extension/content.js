@@ -248,8 +248,10 @@
   function ensureComposeFold(rootH) {
     const container = document.querySelector('[class="css-g5y9jx r-1awozwy r-18u37iz r-6413gk r-1heobfl r-vsjdig"]');
     if (!container) return;
-    // 幂等：容器内已有折叠按钮则跳过
-    if ([...container.children].some((c) => c.classList && c.classList.contains('xao-compose-fold'))) {
+    // 已有折叠按钮：确保它始终是容器最后一个子元素（React 追加子元素会把它挤前面，这里移回末尾）
+    const existing = [...container.children].find((c) => c.classList && c.classList.contains('xao-compose-fold'));
+    if (existing) {
+      if (container.lastElementChild !== existing) container.appendChild(existing);
       return;
     }
     const foldBtn = document.createElement('button');
