@@ -1,0 +1,9 @@
+# 工作区配置 / 敏感文件（不进仓库）
+CLAUDE.md
+M2_BOT_SUMMARY.md
+monitor_state.json
+sync_summary.sh
+.claude/
+*.jpg
+*.mp4
+.DS_Store
