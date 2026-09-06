@@ -207,7 +207,8 @@
       const rootH = document.querySelector('[aria-labelledby="root-header"]');
       if (rootH) {
         rootH.style.margin = '0';
-        rootH.style.maxWidth = '350px';
+        rootH.style.maxWidth = '275px';
+        ensureComposeFold(rootH); // 「更多」同级右侧加折叠图标，切换 root-header 显隐
       }
       const detailH = document.querySelector('[aria-labelledby="detail-header"]');
       if (detailH) {
@@ -244,6 +245,39 @@
       const main = document.querySelector('main');
       if (main && main.firstElementChild) main.firstElementChild.style.width = '';
     }
+  }
+
+  // compose 页 root-header 折叠图标：放在 root-header 同级右侧（root-header 隐藏时图标仍可见），点击切换显隐（幂等）
+  function ensureComposeFold(rootH) {
+    let foldBtn = rootH.querySelector('.xao-compose-fold');
+    if (foldBtn && foldBtn.isConnected) return;
+    const moreBtn = rootH.querySelector('button[aria-label="更多"]');
+    const moreWrap = moreBtn ? moreBtn.parentElement : null;
+    if (!moreWrap) return;
+    foldBtn = document.createElement('button');
+    foldBtn.type = 'button';
+    foldBtn.className = 'xao-compose-fold';
+    foldBtn.title = '折叠/展开';
+    foldBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><line x1="9" y1="4" x2="9" y2="20"></line></svg>';
+    foldBtn.style.cssText =
+      'display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:0;border-radius:999px;background:none;color:rgb(83,100,113);cursor:pointer;padding:0;flex-shrink:0;';
+    const svg = foldBtn.querySelector('svg');
+    if (svg) svg.style.cssText = 'width:18px;height:18px;display:block;';
+    foldBtn.addEventListener('mouseenter', () => {
+      foldBtn.style.background = 'rgba(29,155,240,0.1)';
+      foldBtn.style.color = 'rgb(29,155,240)';
+    });
+    foldBtn.addEventListener('mouseleave', () => {
+      foldBtn.style.background = '';
+      foldBtn.style.color = 'rgb(83,100,113)';
+    });
+    foldBtn.addEventListener('click', () => {
+      const hidden = rootH.style.display === 'none';
+      rootH.style.display = hidden ? '' : 'none';
+    });
+    // 插入到 root-header 同级右侧（父容器内、root-header 之后），root-header 隐藏时图标保持可见
+    if (rootH.parentNode) rootH.parentNode.insertBefore(foldBtn, rootH.nextSibling);
   }
 
   // 折叠开关：更新状态 + 记忆 + 应用布局 + 同步按钮提示
