@@ -215,6 +215,13 @@
         detailH.style.flex = '1';
         detailH.style.maxWidth = 'unset';
       }
+      // 工具条区元素（含 r-z7pwl0，排除 detail-header）：max-width 1280px
+      document.querySelectorAll('[class~="r-z7pwl0"]:not([aria-labelledby="detail-header"])').forEach((el) => {
+        el.style.maxWidth = '1280px';
+      });
+      // 样式工具栏：#toolbar-styling-buttons 居中
+      const toolbar = document.getElementById('toolbar-styling-buttons');
+      if (toolbar) toolbar.style.justifyContent = 'center';
     } else if (savedComposeHeaderClass || savedComposeNavClass) {
       // 仅当进过 compose 页（有改动痕迹）才恢复，避免在普通页面无条件清 main width / 动 header
       if (header) {
