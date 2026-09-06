@@ -13,14 +13,7 @@
 
 ## 功能预览
 
-Mac电脑屏幕
-
-<video src="assets/videos/better-x-usage-1080p-small-screen-compressed.mp4" controls width="80%"></video>
-
-大屏显示器
-
-<video src="assets/videos/better-x-usage-1080p-big-screen-compressed.mp4" controls width="80%"></video>
-
+Github 无法上传大于 10M 的视频，所以功能演示视频 [放到这里](https://x.com/StoryComicAI/status/2096536115322999024?s=20) 👈
 
 | 功能 | 无插件 | 有插件 |
 |---|---|---|
@@ -33,7 +26,8 @@ Mac电脑屏幕
 
 ## 安装（Chrome / Edge / 其他 Chromium）
 
-<video src="assets/videos/Setup-Better-X.mp4" controls width="80%"></video>
+
+Github 无法上传大于 10M 的视频，所以安装视频 [放到这里](https://x.com/StoryComicAI/status/2096536115322999024?s=20) 👈
 
 1. 到 [Releases](https://github.com/GijelaAI/Better-X/releases) 下载最新版 `Better-X-extension.zip`
 2. 解压，得到 `Better-X-extension` 文件夹
