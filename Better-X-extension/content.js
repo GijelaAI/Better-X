@@ -207,7 +207,7 @@
       const rootH = document.querySelector('[aria-labelledby="root-header"]');
       if (rootH) {
         rootH.style.margin = '0';
-        rootH.style.maxWidth = '375px';
+        rootH.style.maxWidth = '350px';
       }
       const detailH = document.querySelector('[aria-labelledby="detail-header"]');
       if (detailH) {
@@ -231,6 +231,9 @@
       // 某个布局元素：横向反排
       const rev = document.querySelector('[class="css-g5y9jx r-1pz39u2 r-13awgt0 r-18u37iz r-1xnzce8 r-1p0dtai r-1d2f490 r-u8s1d r-zchlnj r-ipm5af"]');
       if (rev) rev.style.flexDirection = 'row-reverse';
+      // 元素 r-18jsvk2：垂直居中
+      const c18 = document.querySelector('[class="css-g5y9jx r-18jsvk2"]');
+      if (c18) c18.style.alignItems = 'center';
     } else if (savedComposeHeaderClass || savedComposeNavClass) {
       // 仅当进过 compose 页（有改动痕迹）才恢复，避免在普通页面无条件清 main width / 动 header
       if (header) {
