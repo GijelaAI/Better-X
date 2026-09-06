@@ -784,6 +784,7 @@
   }
 
   // SPA 路由变化：仅 URL 变化时清状态并等新页面渲染
+  let obTimer = null;
   function onDomChange() {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
@@ -792,7 +793,13 @@
       window.setTimeout(ensureOutline, 400);
       return;
     }
-    ensureOutline();
+    // 节流：DOM 高频变化（如 compose 页加载草稿列表）合并为一次处理，
+    // 避免每帧都跑全量布局处理拖累主线程导致页面卡住
+    if (obTimer) return;
+    obTimer = window.setTimeout(() => {
+      obTimer = null;
+      ensureOutline();
+    }, 200);
   }
 
   // 监听 DOM 变化（文章内容异步渲染）。面板构建是幂等的：
