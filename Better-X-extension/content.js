@@ -247,15 +247,14 @@
     }
   }
 
-  // compose 页 root-header 折叠图标：放在 root-header 同级右侧（root-header 隐藏时图标仍可见），点击切换显隐（幂等，只保留一个）
+  // compose 页 root-header 折叠图标：放在指定容器（r-1awozwy r-18u37iz r-6413gk r-1heobfl r-vsjdig）作为最后一个子元素，点击切换 root-header 显隐（幂等，只保留一个）
   function ensureComposeFold(rootH) {
-    // 幂等检查：root-header 同级是否已存在折叠按钮（按钮在 root-header 外侧，不能查内部）
-    if (rootH.parentNode && [...rootH.parentNode.children].some((c) => c.classList && c.classList.contains('xao-compose-fold'))) {
+    const container = document.querySelector('[class="css-g5y9jx r-1awozwy r-18u37iz r-6413gk r-1heobfl r-vsjdig"]');
+    if (!container) return;
+    // 幂等：容器内已有折叠按钮则跳过
+    if ([...container.children].some((c) => c.classList && c.classList.contains('xao-compose-fold'))) {
       return;
     }
-    const moreBtn = rootH.querySelector('button[aria-label="更多"]');
-    const moreWrap = moreBtn ? moreBtn.parentElement : null;
-    if (!moreWrap) return;
     const foldBtn = document.createElement('button');
     foldBtn.type = 'button';
     foldBtn.className = 'xao-compose-fold';
@@ -278,8 +277,7 @@
       const hidden = rootH.style.display === 'none';
       rootH.style.display = hidden ? '' : 'none';
     });
-    // 插入到 root-header 同级右侧（父容器内、root-header 之后），root-header 隐藏时图标保持可见
-    if (rootH.parentNode) rootH.parentNode.insertBefore(foldBtn, rootH.nextSibling);
+    container.appendChild(foldBtn); // 作为容器最后一个子元素
   }
 
   // 折叠开关：更新状态 + 记忆 + 应用布局 + 同步按钮提示
