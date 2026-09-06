@@ -226,12 +226,6 @@
       // 文章实体视图：垂直居中
       const aev = document.querySelector('[data-testid="articleEntityView"]');
       if (aev) aev.style.alignItems = 'center';
-      // 文章阅读视图：自适应宽度（!important 覆盖折叠样式的 657px 限宽）
-      const tav = document.querySelector('[data-testid="twitterArticleReadView"]');
-      if (tav) {
-        tav.style.setProperty('max-width', 'unset', 'important');
-        tav.style.setProperty('width', 'unset', 'important');
-      }
       // 某个布局元素：横向反排
       const rev = document.querySelector('[class="css-g5y9jx r-1pz39u2 r-13awgt0 r-18u37iz r-1xnzce8 r-1p0dtai r-1d2f490 r-u8s1d r-zchlnj r-ipm5af"]');
       if (rev) rev.style.flexDirection = 'row-reverse';
@@ -281,6 +275,15 @@
       rootH.style.display = hidden ? '' : 'none';
     });
     container.appendChild(foldBtn); // 作为容器最后一个子元素
+  }
+
+  // 文章阅读视图：全局（所有页面）设为 max-width 1280 + width unset（!important 覆盖折叠/原生样式）
+  function applyReadViewStyle() {
+    const tav = document.querySelector('[data-testid="twitterArticleReadView"]');
+    if (tav) {
+      tav.style.setProperty('max-width', '1280px', 'important');
+      tav.style.setProperty('width', 'unset', 'important');
+    }
   }
 
   // 折叠开关：更新状态 + 记忆 + 应用布局 + 同步按钮提示
@@ -734,6 +737,9 @@
     try {
       const sidebar = document.querySelector('[data-testid="sidebarColumn"]');
       const isArticle = !!document.querySelector('[data-testid="twitterArticleReadView"]');
+
+      // 全局：文章阅读视图样式（有该元素的所有页面生效）
+      applyReadViewStyle();
 
       // 长文创作页专属处理（无 sidebar，独立于侧边栏逻辑；含 /compose/articles 下所有子页面）
       if (location.pathname.startsWith('/compose/articles')) {
