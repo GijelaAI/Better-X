@@ -24,6 +24,13 @@
   let navCollapsed = false;
   try { navCollapsed = localStorage.getItem(LS_COLLAPSE_KEY) === '1'; } catch (e) {}
 
+  // 宽松布局开关（左导航顶部折叠按钮左侧的小按钮）：
+  // true = Better-X 新布局（导航折叠能力 + 主栏加宽 + 侧栏贴左 + 阅读视图 1280）；
+  // false = 恢复 X 原始布局。默认开启，localStorage 记忆。
+  const LS_LOOSE_KEY = 'x-article-loose-layout';
+  let looseLayout = true;
+  try { looseLayout = localStorage.getItem(LS_LOOSE_KEY) !== '0'; } catch (e) {}
+
   // 底部署名卡显示状态：仅未关注作者时展示（关注后整卡隐藏），无手动关闭途径
   let isFollowing = false;
 
@@ -288,6 +295,15 @@
     }
   }
 
+  // 宽松布局关闭时恢复阅读视图为 X 原生宽度（清掉 inline !important）
+  function restoreReadViewStyle() {
+    const tav = document.querySelector('[data-testid="twitterArticleReadView"]');
+    if (tav) {
+      tav.style.setProperty('max-width', '', 'important');
+      tav.style.setProperty('width', '', 'important');
+    }
+  }
+
   // 折叠开关：更新状态 + 记忆 + 应用布局 + 同步按钮提示
   function setNavCollapsed(v) {
     navCollapsed = v;
@@ -357,14 +373,70 @@
     if (container) navH1El = container;
     const cont = container || navH1El;
     if (!cont) return;
-    if (!navBtn || !navBtn.isConnected) {
+    // 幂等去重：React 重渲染可能清掉按钮后重建，旧节点残留导致同类按钮重复。
+    // 每类只保留第一个，多余的移除；下方再按需补建缺失的。
+    let existingToggle = null;
+    let existingCollapse = null;
+    for (const b of [...cont.children]) {
+      const cls = (b.className && b.className.toString) ? b.className.toString() : '';
+      if (cls.includes('xao-layout-toggle')) { if (existingToggle) b.remove(); else existingToggle = b; }
+      else if (cls.includes('xao-nav-collapse-btn')) { if (existingCollapse) b.remove(); else existingCollapse = b; }
+    }
+    layoutToggleBtn = existingToggle;
+    navBtn = existingCollapse;
+
+    // 宽松布局开关：始终渲染在折叠按钮左侧，off 态也保留（切回宽松布局的入口）
+    if (!layoutToggleBtn) {
+      layoutToggleBtn = document.createElement('button');
+      layoutToggleBtn.type = 'button';
+      layoutToggleBtn.className = 'xao-layout-toggle';
+      layoutToggleBtn.innerHTML = LAYOUT_TOGGLE_ICON;
+      layoutToggleBtn.addEventListener('click', () => {
+        looseLayout = !looseLayout;
+        try { localStorage.setItem(LS_LOOSE_KEY, looseLayout ? '1' : '0'); } catch (e) {}
+        updateLayoutToggleBtn();
+        ensureOutline(); // 立即应用新布局
+      });
+      cont.appendChild(layoutToggleBtn); // 放在 logo 右侧、折叠按钮左侧
+    }
+    updateLayoutToggleBtn();
+    // 折叠态导航只 88px 宽，放不下两个按钮：折叠时隐藏开关，展开时恢复
+    // （用 !important 覆盖样式表里的 display:flex，否则 inline display:none 会被压过）
+    layoutToggleBtn.style.setProperty('display', (looseLayout && navCollapsed) ? 'none' : '', 'important');
+
+    // 宽松布局关闭：导航/主栏/侧栏恢复原始，只留开关按钮
+    if (!looseLayout) {
+      if (navBtn) navBtn.remove();
+      navBtn = null;
+      logo.style.display = '';
+      const wrap0 = document.querySelector('[data-testid="SideNav_NewTweet_Button"]');
+      const wc0 = wrap0 ? wrap0.parentElement : null;
+      if (wc0 && savedTweetWrapClass) { wc0.className = savedTweetWrapClass; savedTweetWrapClass = ''; }
+      // 导航行保持改造（容纳开关按钮）：logo 左、开关右
+      if (cont.className) { if (!savedH1Class) savedH1Class = cont.className; cont.removeAttribute('class'); }
+      cont.style.display = 'flex';
+      cont.style.alignItems = 'center';
+      cont.style.width = '100%';
+      cont.style.margin = '0';
+      cont.style.justifyContent = 'space-between';
+      syncNavBtnTitle();
+      return;
+    }
+
+    if (!navBtn) {
       navBtn = document.createElement('button');
       navBtn.type = 'button';
       navBtn.className = 'xao-nav-collapse-btn';
       navBtn.innerHTML =
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><line x1="9" y1="4" x2="9" y2="20"></line></svg>';
       navBtn.addEventListener('click', () => setNavCollapsed(!navCollapsed));
-      cont.appendChild(navBtn); // 放在 logo 右侧
+    }
+    // 顺序固定 [logo, 开关, 折叠按钮]：折叠按钮必须是容器最后一个子元素（开关紧邻其左侧）
+    if (layoutToggleBtn && cont.lastElementChild !== navBtn) {
+      cont.appendChild(navBtn);
+    }
+    if (navBtn.previousElementSibling !== layoutToggleBtn) {
+      cont.insertBefore(layoutToggleBtn, navBtn);
     }
     // 每轮确保容器布局（X React 重渲染可能清掉 inline 样式 / 恢复 class）
     const outer = cont.parentElement; // h1 外层容器
@@ -411,6 +483,8 @@
   function removeCollapseBtn() {
     if (navBtn && navBtn.isConnected) navBtn.remove();
     navBtn = null;
+    if (layoutToggleBtn && layoutToggleBtn.isConnected) layoutToggleBtn.remove();
+    layoutToggleBtn = null;
     const ns = document.getElementById('xao-nav-style');
     if (ns) ns.remove(); // 清理独立按钮样式
     const logo = document.querySelector('header a[aria-label="X"]');
@@ -516,7 +590,54 @@
       .xao-nav-collapse-btn:hover { background: rgba(29,155,240,0.2) !important; color: rgb(29,155,240) !important; }
       .xao-nav-collapse-btn:hover svg { stroke: rgb(29,155,240); }
     }
+    .xao-layout-toggle {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 44px !important;
+      height: 44px !important;
+      margin: 0 2px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      border-radius: 999px !important;
+      background: transparent !important;
+      cursor: pointer !important;
+      flex-shrink: 0 !important;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    .xao-layout-toggle svg {
+      width: 22px !important;
+      height: 22px !important;
+      display: block !important;
+      stroke: rgb(15,20,25);
+    }
+    .xao-layout-toggle:hover { background: rgba(29,155,240,0.1) !important; }
+    @media (prefers-color-scheme: dark) {
+      .xao-layout-toggle { color: rgb(231,233,234) !important; }
+      .xao-layout-toggle svg { stroke: rgb(231,233,234); }
+    }
   `;
+
+  // 宽松布局开关图标（四宫格布局），title 随状态更新
+  const LAYOUT_TOGGLE_ICON =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<rect x="3" y="3" width="7" height="7" rx="1"></rect>' +
+    '<rect x="14" y="3" width="7" height="7" rx="1"></rect>' +
+    '<rect x="3" y="14" width="7" height="7" rx="1"></rect>' +
+    '<rect x="14" y="14" width="7" height="7" rx="1"></rect>' +
+    '</svg>';
+
+  // 宽松布局开关按钮（折叠按钮左侧）。off 态也保留 —— 它是切回宽松布局的唯一入口
+  let layoutToggleBtn = null;
+
+  function updateLayoutToggleBtn() {
+    if (!layoutToggleBtn) return;
+    layoutToggleBtn.title = looseLayout ? '布局：宽松（点击切换原始）' : '布局：原始（点击切换宽松）';
+    layoutToggleBtn.setAttribute('aria-label', layoutToggleBtn.title);
+    layoutToggleBtn.style.color = looseLayout ? 'rgb(29,155,240)' : 'rgb(83,100,113)';
+    layoutToggleBtn.style.background = looseLayout ? 'rgba(29,155,240,0.15)' : 'transparent';
+  }
 
   const PANEL_STYLE = `
     #${CONFIG.PANEL_ID} {
@@ -740,15 +861,21 @@
       const sidebar = document.querySelector('[data-testid="sidebarColumn"]');
       const isArticle = !!document.querySelector('[data-testid="twitterArticleReadView"]');
 
-      // 全局：文章阅读视图样式（有该元素的所有页面生效）
-      applyReadViewStyle();
+      // 文章阅读视图 1280 宽（宽松布局的一部分）：关闭宽松时恢复 X 原生宽度
+      if (looseLayout) applyReadViewStyle();
+      else restoreReadViewStyle();
 
       // 长文创作页专属处理（无 sidebar，独立于侧边栏逻辑；含 /compose/articles 下所有子页面）
       if (location.pathname.startsWith('/compose/articles')) {
         applyComposeLayout(true);
-        // compose 页也需要侧边栏能力：折叠布局 + 贴左 + 折叠按钮
-        applyArticleLayout(navCollapsed);
-        setNavSnug(true);
+        // compose 页也需要侧边栏能力：折叠布局 + 贴左 + 折叠按钮（受宽松开关控制）
+        if (looseLayout) {
+          applyArticleLayout(navCollapsed);
+          setNavSnug(true);
+        } else {
+          applyArticleLayout(false);
+          setNavSnug(false);
+        }
         syncCollapseBtn();
         return;
       }
@@ -766,12 +893,19 @@
         return;
       }
 
-      // 侧边栏修改全局生效（所有桌面 X 页面）：贴左 + 折叠图标 + 折叠能力 + 主栏调整
-      applyPrimaryColumn();
-      stripYe8kvj();
-      undoNavSectionMiss();
-      applyArticleLayout(navCollapsed);
-      setNavSnug(true);
+      // 侧边栏修改全局生效（所有桌面 X 页面）：贴左 + 折叠图标 + 折叠能力 + 主栏调整（受宽松开关控制）
+      if (looseLayout) {
+        applyPrimaryColumn();
+        stripYe8kvj();
+        undoNavSectionMiss();
+        applyArticleLayout(navCollapsed);
+        setNavSnug(true);
+      } else {
+        // 宽松关闭：恢复 X 原始布局（主栏/导航/侧栏全部还原）
+        restorePrimaryColumn();
+        applyArticleLayout(false);
+        setNavSnug(false);
+      }
       syncCollapseBtn();
 
       if (isArticle) {

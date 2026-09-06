@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Better-X
 // @namespace    https://github.com/gijela
-// @version      0.1.66
-// @description  X 平台增强工具箱：长文大纲、隐藏「有什么新鲜事」、左导航折叠 + 正文加宽，更多能力持续加入。
+// @version      0.1.67
+// @description  X 平台增强工具箱：长文大纲、隐藏「有什么新鲜事」、左导航折叠 + 正文加宽 + 宽松/原始布局开关，更多能力持续加入。
 // @author       m2 bot
 // @match        https://x.com/*
 // @match        https://www.x.com/*
@@ -16,8 +16,8 @@
   // ---------- 配置 ----------
   const CONFIG = {
     PANEL_ID: 'x-article-outline-panel',
-    // 一级章节：优先语义类，兜底文本启发式
-    HEADER_CLASS_SELECTOR: '[class*="longform-header-two"]',
+    // 一级章节：优先语义类（支持多级 longform-header-one/two/three），兜底文本启发式
+    HEADER_CLASS_SELECTOR: '[class*="longform-header"]',
     FALLBACK_BLOCK_SELECTOR: '[class*="longform-unstyled"]',
     // 中文序数 / 数字序号 / 常见结语词（仅用于兜底识别，限制短文本降低误报）
     FALLBACK_TITLE_RE: /^(一|二|三|四|五|六|七|八|九|十|十一|十二|十三|十四|十五)[、.．:：\s]|^第[一二三四五六七八九十百\d]+[章节部分][、.．:：\s]|^\d{1,2}[、.．]\s*\S|^(写在最后|结语|总结|写在前面|写在开篇|后记|尾声)[:：\s]?/,
@@ -26,15 +26,22 @@
     LAYOUT_STYLE_ID: 'x-article-layout-style',
     NAV_COLLAPSED_WIDTH: 88,       // 左侧导航折叠后的图标条宽度
     WIDER_RATIO: 0.15,             // 文章页中间主栏/正文加宽比例（600→690 等）
-    AUTHOR_HANDLE: 'storycomicai', // 插件署名/引导关注的作者账号
+    AUTHOR_HANDLE: 'StoryComicAI', // 插件署名/引导关注的作者账号
     FOLLOW_KEY: 'xao-follow-state', // 关注状态缓存
-    FOLLOW_TTL: 30 * 60 * 1000,   // 关注状态缓存 30 分钟
+    FOLLOW_TTL: 5 * 60 * 1000,    // 关注状态缓存 5 分钟（缩短，减少"已关注仍显示"的窗口）
   };
 
   // 左导航折叠状态（用户手动控制，localStorage 记忆）
   const LS_COLLAPSE_KEY = 'x-article-nav-collapsed';
   let navCollapsed = false;
   try { navCollapsed = localStorage.getItem(LS_COLLAPSE_KEY) === '1'; } catch (e) {}
+
+  // 宽松布局开关（左导航顶部折叠按钮左侧的小按钮）：
+  // true = Better-X 新布局（导航折叠能力 + 主栏加宽 + 侧栏贴左 + 阅读视图 1280）；
+  // false = 恢复 X 原始布局。默认开启，localStorage 记忆。
+  const LS_LOOSE_KEY = 'x-article-loose-layout';
+  let looseLayout = true;
+  try { looseLayout = localStorage.getItem(LS_LOOSE_KEY) !== '0'; } catch (e) {}
 
   // 底部署名卡显示状态：仅未关注作者时展示（关注后整卡隐藏），无手动关闭途径
   let isFollowing = false;
@@ -215,6 +222,35 @@
       }
       const main = document.querySelector('main');
       if (main && main.firstElementChild) main.firstElementChild.style.width = '100%';
+      // 板块导航区（仅创作页）：root-header 限宽 375，detail-header flex 伸展
+      const rootH = document.querySelector('[aria-labelledby="root-header"]');
+      if (rootH) {
+        rootH.style.margin = '0';
+        rootH.style.maxWidth = '350px';
+        ensureComposeFold(rootH); // 「更多」同级右侧加折叠图标，切换 root-header 显隐
+      }
+      const detailH = document.querySelector('[aria-labelledby="detail-header"]');
+      if (detailH) {
+        detailH.style.margin = '0';
+        detailH.style.flex = '1';
+        detailH.style.maxWidth = 'unset';
+      }
+      // 工具条区元素（含 r-z7pwl0，排除 detail-header）：max-width 1280px
+      document.querySelectorAll('[class~="r-z7pwl0"]:not([aria-labelledby="detail-header"])').forEach((el) => {
+        el.style.maxWidth = '1280px';
+      });
+      // 样式工具栏：#toolbar-styling-buttons 居中
+      const toolbar = document.getElementById('toolbar-styling-buttons');
+      if (toolbar) toolbar.style.justifyContent = 'center';
+      // 文章实体视图：垂直居中
+      const aev = document.querySelector('[data-testid="articleEntityView"]');
+      if (aev) aev.style.alignItems = 'center';
+      // 某个布局元素：横向反排
+      const rev = document.querySelector('[class="css-g5y9jx r-1pz39u2 r-13awgt0 r-18u37iz r-1xnzce8 r-1p0dtai r-1d2f490 r-u8s1d r-zchlnj r-ipm5af"]');
+      if (rev) rev.style.flexDirection = 'row-reverse';
+      // 元素 r-18jsvk2：垂直居中
+      const c18 = document.querySelector('[class="css-g5y9jx r-18jsvk2"]');
+      if (c18) c18.style.alignItems = 'center';
     } else if (savedComposeHeaderClass || savedComposeNavClass) {
       // 仅当进过 compose 页（有改动痕迹）才恢复，避免在普通页面无条件清 main width / 动 header
       if (header) {
@@ -224,6 +260,59 @@
       }
       const main = document.querySelector('main');
       if (main && main.firstElementChild) main.firstElementChild.style.width = '';
+    }
+  }
+
+  // compose 页 root-header 折叠图标：放在指定容器（r-1awozwy r-18u37iz r-6413gk r-1heobfl r-vsjdig）作为最后一个子元素，点击切换 root-header 显隐（幂等，只保留一个）
+  function ensureComposeFold(rootH) {
+    const container = document.querySelector('[class="css-g5y9jx r-1awozwy r-18u37iz r-6413gk r-1heobfl r-vsjdig"]');
+    if (!container) return;
+    // 已有折叠按钮：确保它始终是容器最后一个子元素（React 追加子元素会把它挤前面，这里移回末尾）
+    const existing = [...container.children].find((c) => c.classList && c.classList.contains('xao-compose-fold'));
+    if (existing) {
+      if (container.lastElementChild !== existing) container.appendChild(existing);
+      return;
+    }
+    const foldBtn = document.createElement('button');
+    foldBtn.type = 'button';
+    foldBtn.className = 'xao-compose-fold';
+    foldBtn.title = '折叠/展开';
+    foldBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><line x1="9" y1="4" x2="9" y2="20"></line></svg>';
+    foldBtn.style.cssText =
+      'display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:0;border-radius:999px;background:none;color:rgb(83,100,113);cursor:pointer;padding:0;flex-shrink:0;';
+    const svg = foldBtn.querySelector('svg');
+    if (svg) svg.style.cssText = 'width:18px;height:18px;display:block;';
+    foldBtn.addEventListener('mouseenter', () => {
+      foldBtn.style.background = 'rgba(29,155,240,0.1)';
+      foldBtn.style.color = 'rgb(29,155,240)';
+    });
+    foldBtn.addEventListener('mouseleave', () => {
+      foldBtn.style.background = '';
+      foldBtn.style.color = 'rgb(83,100,113)';
+    });
+    foldBtn.addEventListener('click', () => {
+      const hidden = rootH.style.display === 'none';
+      rootH.style.display = hidden ? '' : 'none';
+    });
+    container.appendChild(foldBtn); // 作为容器最后一个子元素
+  }
+
+  // 文章阅读视图：全局（所有页面）设为 max-width 1280 + width unset（!important 覆盖折叠/原生样式）
+  function applyReadViewStyle() {
+    const tav = document.querySelector('[data-testid="twitterArticleReadView"]');
+    if (tav) {
+      tav.style.setProperty('max-width', '1280px', 'important');
+      tav.style.setProperty('width', 'unset', 'important');
+    }
+  }
+
+  // 宽松布局关闭时恢复阅读视图为 X 原生宽度（清掉 inline !important）
+  function restoreReadViewStyle() {
+    const tav = document.querySelector('[data-testid="twitterArticleReadView"]');
+    if (tav) {
+      tav.style.setProperty('max-width', '', 'important');
+      tav.style.setProperty('width', '', 'important');
     }
   }
 
@@ -267,29 +356,12 @@
     });
   }
 
-  // 板块导航元素：margin 0 + max-width 375px（仅 r-th6na 精确定位，避免误伤时间线等其他含 r-f8sm7e 的元素）
-  function styleNavSection() {
-    document.querySelectorAll('[class~="r-th6na"]').forEach((el) => {
-      el.style.margin = '0';
-      el.style.maxWidth = '375px';
-    });
-  }
-
   // 撤销历史误伤：之前用通用选择器把非板块导航的 r-f8sm7e+r-13qz1uu 元素（如主页时间线/文章页元素）设成了 375px，这里恢复原样
   function undoNavSectionMiss() {
     document.querySelectorAll('[class~="r-f8sm7e"][class~="r-13qz1uu"]').forEach((el) => {
       if (el.classList.contains('r-th6na') || el.classList.contains('r-z7pwl0')) return;
       if (el.style.maxWidth === '375px') el.style.maxWidth = '';
       if (el.style.margin === '0') el.style.margin = '';
-    });
-  }
-
-  // 板块导航相邻元素：margin 0 + flex 1 + max-width unset（含 r-z7pwl0）
-  function styleNavSibling() {
-    document.querySelectorAll('[class~="r-z7pwl0"]').forEach((el) => {
-      el.style.margin = '0';
-      el.style.flex = '1';
-      el.style.maxWidth = 'unset';
     });
   }
 
@@ -313,14 +385,70 @@
     if (container) navH1El = container;
     const cont = container || navH1El;
     if (!cont) return;
-    if (!navBtn || !navBtn.isConnected) {
+    // 幂等去重：React 重渲染可能清掉按钮后重建，旧节点残留导致同类按钮重复。
+    // 每类只保留第一个，多余的移除；下方再按需补建缺失的。
+    let existingToggle = null;
+    let existingCollapse = null;
+    for (const b of [...cont.children]) {
+      const cls = (b.className && b.className.toString) ? b.className.toString() : '';
+      if (cls.includes('xao-layout-toggle')) { if (existingToggle) b.remove(); else existingToggle = b; }
+      else if (cls.includes('xao-nav-collapse-btn')) { if (existingCollapse) b.remove(); else existingCollapse = b; }
+    }
+    layoutToggleBtn = existingToggle;
+    navBtn = existingCollapse;
+
+    // 宽松布局开关：始终渲染在折叠按钮左侧，off 态也保留（切回宽松布局的入口）
+    if (!layoutToggleBtn) {
+      layoutToggleBtn = document.createElement('button');
+      layoutToggleBtn.type = 'button';
+      layoutToggleBtn.className = 'xao-layout-toggle';
+      layoutToggleBtn.innerHTML = LAYOUT_TOGGLE_ICON;
+      layoutToggleBtn.addEventListener('click', () => {
+        looseLayout = !looseLayout;
+        try { localStorage.setItem(LS_LOOSE_KEY, looseLayout ? '1' : '0'); } catch (e) {}
+        updateLayoutToggleBtn();
+        ensureOutline(); // 立即应用新布局
+      });
+      cont.appendChild(layoutToggleBtn); // 放在 logo 右侧、折叠按钮左侧
+    }
+    updateLayoutToggleBtn();
+    // 折叠态导航只 88px 宽，放不下两个按钮：折叠时隐藏开关，展开时恢复
+    // （用 !important 覆盖样式表里的 display:flex，否则 inline display:none 会被压过）
+    layoutToggleBtn.style.setProperty('display', (looseLayout && navCollapsed) ? 'none' : '', 'important');
+
+    // 宽松布局关闭：导航/主栏/侧栏恢复原始，只留开关按钮
+    if (!looseLayout) {
+      if (navBtn) navBtn.remove();
+      navBtn = null;
+      logo.style.display = '';
+      const wrap0 = document.querySelector('[data-testid="SideNav_NewTweet_Button"]');
+      const wc0 = wrap0 ? wrap0.parentElement : null;
+      if (wc0 && savedTweetWrapClass) { wc0.className = savedTweetWrapClass; savedTweetWrapClass = ''; }
+      // 导航行保持改造（容纳开关按钮）：logo 左、开关右
+      if (cont.className) { if (!savedH1Class) savedH1Class = cont.className; cont.removeAttribute('class'); }
+      cont.style.display = 'flex';
+      cont.style.alignItems = 'center';
+      cont.style.width = '100%';
+      cont.style.margin = '0';
+      cont.style.justifyContent = 'space-between';
+      syncNavBtnTitle();
+      return;
+    }
+
+    if (!navBtn) {
       navBtn = document.createElement('button');
       navBtn.type = 'button';
       navBtn.className = 'xao-nav-collapse-btn';
       navBtn.innerHTML =
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><line x1="9" y1="4" x2="9" y2="20"></line></svg>';
       navBtn.addEventListener('click', () => setNavCollapsed(!navCollapsed));
-      cont.appendChild(navBtn); // 放在 logo 右侧
+    }
+    // 顺序固定 [logo, 开关, 折叠按钮]：折叠按钮必须是容器最后一个子元素（开关紧邻其左侧）
+    if (layoutToggleBtn && cont.lastElementChild !== navBtn) {
+      cont.appendChild(navBtn);
+    }
+    if (navBtn.previousElementSibling !== layoutToggleBtn) {
+      cont.insertBefore(layoutToggleBtn, navBtn);
     }
     // 每轮确保容器布局（X React 重渲染可能清掉 inline 样式 / 恢复 class）
     const outer = cont.parentElement; // h1 外层容器
@@ -367,6 +495,8 @@
   function removeCollapseBtn() {
     if (navBtn && navBtn.isConnected) navBtn.remove();
     navBtn = null;
+    if (layoutToggleBtn && layoutToggleBtn.isConnected) layoutToggleBtn.remove();
+    layoutToggleBtn = null;
     const ns = document.getElementById('xao-nav-style');
     if (ns) ns.remove(); // 清理独立按钮样式
     const logo = document.querySelector('header a[aria-label="X"]');
@@ -415,9 +545,14 @@
       sections.push({ text: t, el, level });
     };
 
-    // 方式 1：语义标题（作者用了「标题」格式）
+    // 方式 1：语义标题（支持多级：longform-header-one → 一级，-two → 二级，-three → 三级）
     rich.querySelectorAll(CONFIG.HEADER_CLASS_SELECTOR).forEach((h) => {
-      push(h.innerText, h, 1);
+      const cls = (h.className || '').toString();
+      let level = 1;
+      if (cls.includes('longform-header-three')) level = 3;
+      else if (cls.includes('longform-header-two')) level = 2;
+      else if (cls.includes('longform-header-one')) level = 1;
+      push(h.innerText, h, level);
     });
 
     // 方式 2：兜底 —— 无语义标题时，用中文序数/数字/结语词启发式
@@ -467,7 +602,54 @@
       .xao-nav-collapse-btn:hover { background: rgba(29,155,240,0.2) !important; color: rgb(29,155,240) !important; }
       .xao-nav-collapse-btn:hover svg { stroke: rgb(29,155,240); }
     }
+    .xao-layout-toggle {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 44px !important;
+      height: 44px !important;
+      margin: 0 2px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      border-radius: 999px !important;
+      background: transparent !important;
+      cursor: pointer !important;
+      flex-shrink: 0 !important;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    .xao-layout-toggle svg {
+      width: 22px !important;
+      height: 22px !important;
+      display: block !important;
+      stroke: rgb(15,20,25);
+    }
+    .xao-layout-toggle:hover { background: rgba(29,155,240,0.1) !important; }
+    @media (prefers-color-scheme: dark) {
+      .xao-layout-toggle { color: rgb(231,233,234) !important; }
+      .xao-layout-toggle svg { stroke: rgb(231,233,234); }
+    }
   `;
+
+  // 宽松布局开关图标（四宫格布局），title 随状态更新
+  const LAYOUT_TOGGLE_ICON =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<rect x="3" y="3" width="7" height="7" rx="1"></rect>' +
+    '<rect x="14" y="3" width="7" height="7" rx="1"></rect>' +
+    '<rect x="3" y="14" width="7" height="7" rx="1"></rect>' +
+    '<rect x="14" y="14" width="7" height="7" rx="1"></rect>' +
+    '</svg>';
+
+  // 宽松布局开关按钮（折叠按钮左侧）。off 态也保留 —— 它是切回宽松布局的唯一入口
+  let layoutToggleBtn = null;
+
+  function updateLayoutToggleBtn() {
+    if (!layoutToggleBtn) return;
+    layoutToggleBtn.title = looseLayout ? '布局：宽松（点击切换原始）' : '布局：原始（点击切换宽松）';
+    layoutToggleBtn.setAttribute('aria-label', layoutToggleBtn.title);
+    layoutToggleBtn.style.color = looseLayout ? 'rgb(29,155,240)' : 'rgb(83,100,113)';
+    layoutToggleBtn.style.background = looseLayout ? 'rgba(29,155,240,0.15)' : 'transparent';
+  }
 
   const PANEL_STYLE = `
     #${CONFIG.PANEL_ID} {
@@ -501,7 +683,7 @@
       #${CONFIG.PANEL_ID} .xao-title { color: rgb(231,233,234); }
     }
     #${CONFIG.PANEL_ID} .xao-list {
-      max-height: min(60vh, 480px);
+      max-height: calc(100vh - 190px);
       overflow-y: auto;
       padding: 4px 8px 12px;
     }
@@ -521,6 +703,9 @@
       font-family: inherit;
     }
     #${CONFIG.PANEL_ID} .xao-item:hover { background: rgba(0,0,0,0.05); color: rgb(15,20,25); }
+    #${CONFIG.PANEL_ID} .xao-item[data-level="1"] { color: rgb(15,20,25); font-weight: 700; }
+    #${CONFIG.PANEL_ID} .xao-item[data-level="2"] { padding-left: 20px; }
+    #${CONFIG.PANEL_ID} .xao-item[data-level="3"] { padding-left: 30px; font-size: 13px; }
     #${CONFIG.PANEL_ID} .xao-item.xao-active {
       color: rgb(15,20,25);
       font-size: 16px;
@@ -529,24 +714,29 @@
     @media (prefers-color-scheme: dark) {
       #${CONFIG.PANEL_ID} .xao-item:hover { background: rgba(255,255,255,0.08); color: rgb(231,233,234); }
       #${CONFIG.PANEL_ID} .xao-item.xao-active { color: rgb(231,233,234); font-size: 16px; font-weight: 800; }
+      #${CONFIG.PANEL_ID} .xao-item[data-level="1"] { color: rgb(231,233,234); }
     }
-    #${CONFIG.PANEL_ID} .xao-credit {
+    #${CONFIG.PANEL_ID} .xao-credit-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin: 2px 8px 12px;
-      padding: 9px 12px;
-      border-radius: 12px;
-      background: rgba(29,155,240,0.08);
-      font-size: 13px;
+      gap: 8px;
+      padding: 7px 8px;
+      margin: 0;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 20px;
+      color: rgb(83,100,113);
+      font-family: inherit;
     }
-    #${CONFIG.PANEL_ID} .xao-credit-text { color: rgb(83,100,113); }
-    #${CONFIG.PANEL_ID} .xao-credit-text b { color: rgb(15,20,25); }
+    #${CONFIG.PANEL_ID} .xao-credit-row:hover { background: rgba(0,0,0,0.05); color: rgb(15,20,25); }
+    #${CONFIG.PANEL_ID} .xao-credit-row b { color: rgb(15,20,25); font-weight: 800; }
     @media (prefers-color-scheme: dark) {
-      #${CONFIG.PANEL_ID} .xao-credit-text b { color: rgb(231,233,234); }
+      #${CONFIG.PANEL_ID} .xao-credit-row:hover { background: rgba(255,255,255,0.08); color: rgb(231,233,234); }
+      #${CONFIG.PANEL_ID} .xao-credit-row b { color: rgb(231,233,234); }
     }
-    #${CONFIG.PANEL_ID} .xao-credit-right { display: flex; align-items: center; gap: 6px; }
     #${CONFIG.PANEL_ID} .xao-credit-follow {
+      flex-shrink: 0;
       background: rgb(15,20,25);
       color: rgb(255,255,255);
       border: 0;
@@ -554,14 +744,14 @@
       padding: 4px 12px;
       font-size: 12px;
       font-weight: 700;
+      line-height: 18px;
       cursor: pointer;
       text-decoration: none;
-      line-height: 18px;
       font-family: inherit;
     }
-    #${CONFIG.PANEL_ID} .xao-credit-follow:hover { opacity: 0.85; }
+    #${CONFIG.PANEL_ID} .xao-credit-follow:hover { opacity: 0.8; }
     @media (prefers-color-scheme: dark) {
-      #${CONFIG.PANEL_ID} .xao-credit-follow { background: rgb(239,243,244); color: rgb(15,20,25); }
+      #${CONFIG.PANEL_ID} .xao-credit-follow { background: rgb(231,233,234); color: rgb(15,20,25); }
     }
   `;
 
@@ -579,19 +769,22 @@
     if (meta.title) {
       html += `<div class="xao-title">${escapeHtml(meta.title)}</div>`;
     }
+    // 引导关注：作为大纲最后一个"子标题"（无卡片背景，右侧黑底白字关注按钮）
+    const creditHtml =
+      '<div class="xao-credit-row">' +
+      `<span>由 <b>@${CONFIG.AUTHOR_HANDLE}</b> 出品</span>` +
+      `<a class="xao-credit-follow" href="https://x.com/${CONFIG.AUTHOR_HANDLE}" target="_blank" rel="noopener">关注</a>` +
+      '</div>';
     if (meta.sections.length) {
       html += '<div class="xao-list">';
       meta.sections.forEach((s, i) => {
-        html += `<button type="button" class="xao-item" data-idx="${i}">${escapeHtml(s.text)}</button>`;
+        html += `<button type="button" class="xao-item" data-level="${s.level || 1}" data-idx="${i}">${escapeHtml(s.text)}</button>`;
       });
+      html += creditHtml;
       html += '</div>';
+    } else {
+      html += creditHtml;
     }
-    // 底部署名关注卡（不可手动关闭；唯一消失途径 = 关注作者账号）
-    html +=
-      '<div class="xao-credit">' +
-      `<span class="xao-credit-text">✦ 由 <b>@${CONFIG.AUTHOR_HANDLE}</b> 出品</span>` +
-      `<a class="xao-credit-follow" href="https://x.com/${CONFIG.AUTHOR_HANDLE}" target="_blank" rel="noopener">关注</a>` +
-      '</div>';
     panel.innerHTML = html;
 
     mountPanel(panel);
@@ -617,10 +810,10 @@
       });
     });
 
-    // 异步检测关注状态：当前用户已关注作者 → 整个引导关注卡都不展示（只留标题 + 大纲）
+    // 异步检测关注状态：当前用户已关注作者 → 整个引导条目都不展示（只留标题 + 大纲）
     checkFollowing().then(() => {
       if (isFollowing) {
-        const credit = panel.querySelector('.xao-credit');
+        const credit = panel.querySelector('.xao-credit-row');
         if (credit) credit.remove();
       }
     });
@@ -680,9 +873,22 @@
       const sidebar = document.querySelector('[data-testid="sidebarColumn"]');
       const isArticle = !!document.querySelector('[data-testid="twitterArticleReadView"]');
 
+      // 文章阅读视图 1280 宽（宽松布局的一部分）：关闭宽松时恢复 X 原生宽度
+      if (looseLayout) applyReadViewStyle();
+      else restoreReadViewStyle();
+
       // 长文创作页专属处理（无 sidebar，独立于侧边栏逻辑；含 /compose/articles 下所有子页面）
       if (location.pathname.startsWith('/compose/articles')) {
         applyComposeLayout(true);
+        // compose 页也需要侧边栏能力：折叠布局 + 贴左 + 折叠按钮（受宽松开关控制）
+        if (looseLayout) {
+          applyArticleLayout(navCollapsed);
+          setNavSnug(true);
+        } else {
+          applyArticleLayout(false);
+          setNavSnug(false);
+        }
+        syncCollapseBtn();
         return;
       }
       applyComposeLayout(false);
@@ -699,14 +905,19 @@
         return;
       }
 
-      // 侧边栏修改全局生效（所有桌面 X 页面）：贴左 + 折叠图标 + 折叠能力 + 主栏调整
-      applyPrimaryColumn();
-      stripYe8kvj();
-      styleNavSection();
-      styleNavSibling();
-      undoNavSectionMiss();
-      applyArticleLayout(navCollapsed);
-      setNavSnug(true);
+      // 侧边栏修改全局生效（所有桌面 X 页面）：贴左 + 折叠图标 + 折叠能力 + 主栏调整（受宽松开关控制）
+      if (looseLayout) {
+        applyPrimaryColumn();
+        stripYe8kvj();
+        undoNavSectionMiss();
+        applyArticleLayout(navCollapsed);
+        setNavSnug(true);
+      } else {
+        // 宽松关闭：恢复 X 原始布局（主栏/导航/侧栏全部还原）
+        restorePrimaryColumn();
+        applyArticleLayout(false);
+        setNavSnug(false);
+      }
       syncCollapseBtn();
 
       if (isArticle) {
@@ -730,6 +941,7 @@
   }
 
   // SPA 路由变化：仅 URL 变化时清状态并等新页面渲染
+  let obTimer = null;
   function onDomChange() {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
@@ -738,7 +950,13 @@
       window.setTimeout(ensureOutline, 400);
       return;
     }
-    ensureOutline();
+    // 节流：DOM 高频变化（如 compose 页加载草稿列表）合并为一次处理，
+    // 避免每帧都跑全量布局处理拖累主线程导致页面卡住
+    if (obTimer) return;
+    obTimer = window.setTimeout(() => {
+      obTimer = null;
+      ensureOutline();
+    }, 200);
   }
 
   // 监听 DOM 变化（文章内容异步渲染）。面板构建是幂等的：
