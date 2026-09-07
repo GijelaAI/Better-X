@@ -84,9 +84,9 @@
   }
 
   // ---------- 侧栏卡片定位（X 文章页右侧栏） ----------
-  // 结构：sidebarColumn > 内容容器 > div[aria-label="当前趋势"]（外层容器，含搜索框等全部卡片）
-  //       > 卡片列表 > [搜索卡, 相关用户卡, 直播卡, 趋势卡, 页脚卡, ...]
-  // 搜索卡特征：包含 [data-testid="SearchBox_Search_Input"]
+  // 结构：sidebarColumn > 外层容器（aria-label 随界面语言变化，见 SIDEBAR_OUTER_LABELS）> 卡片列表
+  //       > [搜索卡, 相关用户卡, 直播卡, 趋势卡, 页脚卡, ...]
+  // 搜索卡特征：包含 [data-testid="SearchBox_Search_Input"]（语言无关）；外层容器用多语言 aria-label + 结构兜底定位
   function getSidebarState() {
     const sidebar = document.querySelector('[data-testid="sidebarColumn"]');
     const searchInput = document.querySelector('[data-testid="SearchBox_Search_Input"]');
