@@ -798,7 +798,7 @@
     const creditHtml =
       '<div class="xao-credit-row">' +
       `<span>由 <b>@${CONFIG.AUTHOR_HANDLE}</b> 出品</span>` +
-      `<a class="xao-credit-follow" href="https://x.com/${CONFIG.AUTHOR_HANDLE}" target="_blank" rel="noopener">关注</a>` +
+      `<a class="xao-credit-follow" href="https://x.com/${CONFIG.AUTHOR_HANDLE}" target="_blank" rel="noopener">关注后5min隐藏</a>` +
       '</div>';
     if (meta.sections.length) {
       html += '<div class="xao-list">';
