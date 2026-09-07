@@ -19,9 +19,15 @@
     // 一级章节：优先语义类（支持多级 longform-header-one/two/three），兜底文本启发式
     HEADER_CLASS_SELECTOR: '[class*="longform-header"]',
     FALLBACK_BLOCK_SELECTOR: '[class*="longform-unstyled"]',
-    // 中文序数 / 数字序号 / 常见结语词（仅用于兜底识别，限制短文本降低误报）
-    FALLBACK_TITLE_RE: /^(一|二|三|四|五|六|七|八|九|十|十一|十二|十三|十四|十五)[、.．:：\s]|^第[一二三四五六七八九十百\d]+[章节部分][、.．:：\s]|^\d{1,2}[、.．]\s*\S|^(写在最后|结语|总结|写在前面|写在开篇|后记|尾声)[:：\s]?/,
+    // 兜底标题识别（无语义标题时）：中文序数/数字序号/结语词 + 英文编号/章节词/常见标题词（i 忽略大小写）
+    FALLBACK_TITLE_RE: /^(一|二|三|四|五|六|七|八|九|十|十一|十二|十三|十四|十五)[、.．:：\s]|^第[一二三四五六七八九十百\d]+[章节部分][、.．:：\s]|^\d{1,2}[、.．):]\s*\S|^(写在最后|结语|总结|写在前面|写在开篇|后记|尾声)[:：\s]?|^(chapter|part|section|step|module|episode|lesson|stage|phase|act)\s*\d+[\s.:：]?|^(introduction|conclusion|summary|overview|preface|foreword|references|appendix|epilogue|afterword|final thoughts|key takeaways|getting started|background|motivation|related work|future work)[:：\s]?|^(what is|what are|how to|why [a-z]|the case for|the case against|the rise of|the future of|a guide to|an introduction to)\s/i,
     MAX_FALLBACK_LEN: 45,          // 兜底标题最大长度（超过按正文处理）
+    // 英文短短语标题兜底（第二档，无任何明确标题特征时启用）：首字母大写 + 更严长度 + 排除正文常见开头词，降低误报
+    MAX_FALLBACK_EN_PHRASE_LEN: 32,
+    FALLBACK_EN_PHRASE_RE: /^[A-Z][a-zA-Z-]+\s/,
+    FALLBACK_EN_PHRASE_EXCLUDE_RE: /^(The|A|An|This|That|These|Those|It|We|You|They|I|There|Here|But|And|Or|However|Because|Most|Many|Some|Every|Each|All|If|When|While|After|Before|During|With|Without|From|Through|Between|Among|Being|Having|Is|Are|Was|Were|Can|Could|Will|Would|Should|Do|Does|Did|Have|Has|Had|What|How|Why|Where|Who)\s/,
+    // 侧栏外层容器 aria-label（X 随界面语言变化，多语言定位）
+    SIDEBAR_OUTER_LABELS: ['当前趋势', 'Trending now', 'Trending', "What's happening", 'What’s happening'],
     SCROLL_OFFSET: 72,             // 滚动到章节的顶部偏移（X 顶部 sticky 导航 53px + 缓冲）
     LAYOUT_STYLE_ID: 'x-article-layout-style',
     NAV_COLLAPSED_WIDTH: 88,       // 左侧导航折叠后的图标条宽度
@@ -94,17 +100,35 @@
   //       > 卡片列表 > [搜索卡, 相关用户卡, 直播卡, 趋势卡, 页脚卡, ...]
   // 搜索卡特征：包含 [data-testid="SearchBox_Search_Input"]
   function getSidebarState() {
-    const outer = document.querySelector('div[aria-label="当前趋势"]');
-    if (!outer) return { list: null, searchCard: null };
-    const list = outer.firstElementChild;
+    const sidebar = document.querySelector('[data-testid="sidebarColumn"]');
     const searchInput = document.querySelector('[data-testid="SearchBox_Search_Input"]');
+    let outer = null;
+    // 多语言 aria-label 定位外层容器（X 随界面语言变化：当前趋势 / Trending now / What's happening ...）
+    for (const label of CONFIG.SIDEBAR_OUTER_LABELS) {
+      const el = document.querySelector('div[aria-label="' + label + '"]');
+      if (el) { outer = el; break; }
+    }
+    // 结构兜底（语言无关）：从搜索框向上找「含搜索卡的卡片列表」容器
+    if (!outer && searchInput && sidebar) {
+      let el = searchInput.parentElement;
+      while (el && el !== sidebar.parentElement) {
+        const kids = [...el.children].filter((c) => c.children && c.children.length > 0);
+        if (kids.length >= 2 && kids.some((c) => c.contains(searchInput))) {
+          outer = el;
+          break;
+        }
+        el = el.parentElement;
+      }
+    }
+    const list = outer ? outer.firstElementChild : null;
     let searchCard = null;
     if (list && searchInput) {
       for (const c of list.children) {
         if (c.contains(searchInput)) { searchCard = c; break; }
       }
     }
-    return { list, searchCard };
+    // 定位失败（找不到搜索卡）时返回空，调用方走 fallback，避免误隐藏侧栏卡片
+    return { list: searchCard ? list : null, searchCard: searchCard ? searchCard : null };
   }
 
   // 隐藏除搜索框外的所有侧栏卡片（相关用户/直播/趋势/页脚），保留搜索卡 + 大纲面板
@@ -555,12 +579,25 @@
       push(h.innerText, h, level);
     });
 
-    // 方式 2：兜底 —— 无语义标题时，用中文序数/数字/结语词启发式
+    // 方式 2：兜底 —— 无语义标题时用启发式识别（中文序数/数字序号/结语词 + 英文编号/章节词/常见标题词）
     if (sections.length === 0) {
       rich.querySelectorAll(CONFIG.FALLBACK_BLOCK_SELECTOR).forEach((d) => {
         const t = d.innerText.trim();
         if (t.length === 0 || t.length > CONFIG.MAX_FALLBACK_LEN) return;
         if (CONFIG.FALLBACK_TITLE_RE.test(t)) push(t, d, 1);
+      });
+    }
+    // 方式 3：兜底第二档 —— 仍无语义标题且无明确标题特征时，用英文短短语标题启发式。
+    // unstyled 块是「标题+正文」整段，故取第一句（到句号/换行前）作候选标题；
+    // 首字母大写 + 更严长度 + 排除正文常见开头词降低误报；含中文的候选跳过（不影响中文版本）
+    if (sections.length === 0) {
+      rich.querySelectorAll(CONFIG.FALLBACK_BLOCK_SELECTOR).forEach((d) => {
+        const raw = d.innerText.trim();
+        if (!raw) return;
+        const head = raw.split(/[.:!?\n]/, 1)[0].trim();
+        if (!head || head.length === 0 || head.length > CONFIG.MAX_FALLBACK_EN_PHRASE_LEN) return;
+        if (/[一-鿿]/.test(head)) return; // 含中文跳过，英文短语规则只作用于纯英文候选
+        if (CONFIG.FALLBACK_EN_PHRASE_RE.test(head) && !CONFIG.FALLBACK_EN_PHRASE_EXCLUDE_RE.test(head)) push(head, d, 1);
       });
     }
 
