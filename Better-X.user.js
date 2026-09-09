@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-X
 // @namespace    https://github.com/gijela
-// @version      0.1.68
+// @version      0.1.70
 // @description  X 平台增强工具箱：长文大纲、隐藏「有什么新鲜事」、左导航折叠 + 正文加宽 + 宽松/原始布局开关，更多能力持续加入。
 // @author       m2 bot
 // @match        https://x.com/*
@@ -186,43 +186,56 @@
   }
 
   let savedPrimaryClass = ''; // primaryColumn 原始 class，恢复时用
-  let primaryEl = null;
-  let primaryChild = null; // primaryColumn 第一个子元素，恢复时清样式
+
+  // 兜底读取原始 className：X 的 React 渲染早期 primaryColumn 的 className 可能为空，
+  // 从 React fiber 的 memoizedProps 拿到渲染时的 class，保证切回原始布局时能完整恢复
+  function readReactClassName(el) {
+    for (const key in el) {
+      if (key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$')) {
+        let node = el[key];
+        while (node) {
+          const p = node.memoizedProps;
+          if (p && typeof p.className === 'string' && p.className) return p.className;
+          node = node.return;
+        }
+        break;
+      }
+    }
+    return '';
+  }
 
   // 中间主栏：去掉 X class + 占满宽度 + flex 居中，内容子元素限宽居中（全局生效，离开恢复）
   function applyPrimaryColumn() {
     const el = document.querySelector('[data-testid="primaryColumn"]');
     if (!el) return;
-    primaryEl = el;
-    if (el.className) {
-      if (!savedPrimaryClass) savedPrimaryClass = el.className;
-      el.removeAttribute('class');
-    }
+    if (!savedPrimaryClass) savedPrimaryClass = el.className || readReactClassName(el);
+    el.removeAttribute('class');
     el.style.width = '100%';
     el.style.margin = '0 12px';
     el.style.display = 'flex';
     el.style.justifyContent = 'center';
     const first = el.firstElementChild;
     if (first) {
-      primaryChild = first;
       first.style.maxWidth = '1280px';
       first.style.flex = '1';
     }
   }
 
   function restorePrimaryColumn() {
-    if (primaryEl) {
-      if (savedPrimaryClass) { primaryEl.className = savedPrimaryClass; savedPrimaryClass = ''; }
-      primaryEl.style.width = '';
-      primaryEl.style.margin = '';
-      primaryEl.style.display = '';
-      primaryEl.style.justifyContent = '';
-      if (primaryChild) {
-        primaryChild.style.maxWidth = '';
-        primaryChild.style.flex = '';
-        primaryChild = null;
+    // 实时查询当前 DOM 中的主栏：宽松布局期间 X 的 React 会重渲染/替换节点，
+    // 缓存的节点引用会失效，导致恢复操作落在脱离 DOM 的旧节点上、主栏残留改造样式（整体居左）。
+    const el = document.querySelector('[data-testid="primaryColumn"]');
+    if (el) {
+      if (savedPrimaryClass) { el.className = savedPrimaryClass; savedPrimaryClass = ''; }
+      el.style.width = '';
+      el.style.margin = '';
+      el.style.display = '';
+      el.style.justifyContent = '';
+      const first = el.firstElementChild;
+      if (first) {
+        first.style.maxWidth = '';
+        first.style.flex = '';
       }
-      primaryEl = null;
     }
   }
 
@@ -371,7 +384,9 @@
   let navH1El = null; // 缓存的 h1 容器引用
   let savedH1Class = ''; // h1 原始 class，离开文章页时恢复
   let savedHeaderClass = ''; // <header> 原始 class，离开文章页时恢复
+  let originalHeaderClass = ''; // 启动时缓存的 <header> X 原始 class（宽松模式下 React 会抢先剥空 header class，切换时无法保存，故在 class 尚完整时预存，恢复布局用）
   let savedTweetWrapClass = ''; // 发帖按钮外层容器原始 class（折叠时去掉 r-e7q0ms）
+  let artFullscreenCentered = false; // 文章全屏/沉浸式阅读居中锁存：margin 居中后内容不再贴左，若按位置反复判定会闪烁，故锁存
 
   // 去掉元素上的 r-1ye8kvj class（home 页某模块，幂等）
   function stripYe8kvj() {
@@ -398,6 +413,11 @@
     if (fresh) navLogoEl = fresh;
     const logo = fresh || (navLogoEl && navLogoEl.isConnected ? navLogoEl : null);
     if (!logo) return; // 彻底找不到时放弃，由 2s 兜底定时器重试
+    // 尽早缓存 header 的 X 原始 class：宽松模式下 React 会抢先剥空，切换时保存不到，必须在 class 尚完整时预存
+    if (!originalHeaderClass) {
+      const h0 = logo.closest('header');
+      if (h0 && h0.className) originalHeaderClass = h0.className;
+    }
     // 确保按钮样式注入（独立于面板样式，非文章页也必须生效）
     if (!document.getElementById('xao-nav-style')) {
       const ns = document.createElement('style');
@@ -448,6 +468,13 @@
       const wrap0 = document.querySelector('[data-testid="SideNav_NewTweet_Button"]');
       const wc0 = wrap0 ? wrap0.parentElement : null;
       if (wc0 && savedTweetWrapClass) { wc0.className = savedTweetWrapClass; savedTweetWrapClass = ''; }
+      // 恢复 header 的 X class（宽松模式下被剥离，不恢复会导致 header 宽度塌缩、整体布局贴左不居中）
+      const header0 = cont.closest('header');
+      const origCls = savedHeaderClass || originalHeaderClass;
+      if (header0 && origCls) { header0.className = origCls; savedHeaderClass = ''; }
+      // 清掉宽松模式下对 h1 外层容器设置的 width:100%
+      const outer0 = cont.parentElement;
+      if (outer0) outer0.style.width = '';
       // 导航行保持改造（容纳开关按钮）：logo 左、开关右
       if (cont.className) { if (!savedH1Class) savedH1Class = cont.className; cont.removeAttribute('class'); }
       cont.style.display = 'flex';
@@ -483,9 +510,12 @@
       cont.removeAttribute('class'); // 去掉 h1 的所有 X class
     }
     // 去掉 <header> 本身的 X class（保存原始以恢复）
+    // 注意：宽松模式下 React 会抢先剥空 header class（脚本改动 DOM 触发其重渲染），
+    // 此时 header.className 已空保存不到，必须用启动时缓存的 originalHeaderClass 兜底
     const header = cont.closest('header');
-    if (header && header.className) {
-      if (!savedHeaderClass) savedHeaderClass = header.className;
+    if (!originalHeaderClass && header && header.className) originalHeaderClass = header.className;
+    if (header) {
+      if (!savedHeaderClass) savedHeaderClass = originalHeaderClass;
       header.removeAttribute('class');
     }
     cont.style.display = 'flex';
@@ -527,7 +557,8 @@
     if (logo) {
       logo.style.display = '';
       const hdr = logo.closest('header');
-      if (hdr && savedHeaderClass) { hdr.className = savedHeaderClass; savedHeaderClass = ''; } // 恢复 header class
+      const hdrRCls = savedHeaderClass || originalHeaderClass;
+      if (hdr && hdrRCls) { hdr.className = hdrRCls; savedHeaderClass = ''; } // 恢复 header class
       const wrap = document.querySelector('[data-testid="SideNav_NewTweet_Button"]');
       const wc = wrap ? wrap.parentElement : null;
       if (wc && savedTweetWrapClass) { wc.className = savedTweetWrapClass; savedTweetWrapClass = ''; } // 恢复发帖按钮容器 class
@@ -914,14 +945,38 @@
       if (looseLayout) applyReadViewStyle();
       else restoreReadViewStyle();
 
+      // 文章全屏/沉浸式查看居中：X 的 main 为 flex 单列时，内容容器默认靠左（flex-start），
+      // 全屏查看（无 sidebar / primaryColumn）下手动 `margin: 0 auto` 让文章内容居中；
+      // 非全屏文章页 main > div:first-child 已由 X 原生居中，置空 margin 不产生副作用
+      if (isArticle) {
+        const artMain = document.querySelector('main');
+        const artFirst = artMain ? artMain.firstElementChild : null;
+        const firstHasTav = !!(artFirst && artFirst.querySelector('[data-testid="twitterArticleReadView"]'));
+        // 全屏阅读结构：main 单列、无 sidebar/primaryColumn、首个子元素为文章阅读视图
+        const isFullscreenLayout = !sidebar && !document.querySelector('[data-testid="primaryColumn"]') && artMain && artMain.children.length === 1 && firstHasTav;
+        if (isFullscreenLayout) {
+          // 锁存：首次按内容贴左（<200）判定进入全屏居中；之后保持，内容明显偏右（>窗口1/3）视为已退出全屏再解锁
+          const left = artFirst ? artFirst.getBoundingClientRect().left : 0;
+          if (!artFullscreenCentered && left < 200) artFullscreenCentered = true;
+          else if (artFullscreenCentered && left > window.innerWidth / 3) artFullscreenCentered = false;
+          if (artFullscreenCentered) artFirst.style.margin = '0 auto';
+          else if (artFirst) artFirst.style.margin = '';
+        } else {
+          artFullscreenCentered = false;
+          if (artFirst) artFirst.style.margin = '';
+        }
+      }
+
       // 长文创作页专属处理（无 sidebar，独立于侧边栏逻辑；含 /compose/articles 下所有子页面）
+      // 仅宽松模式应用 Better-X 创作布局；原始模式保持 X 原生布局
+      // （否则 applyComposeLayout 会剥掉 header class 并把 main 设成 100% 宽，内容区从导航边沿延伸，整体偏右而非居中）
       if (location.pathname.startsWith('/compose/articles')) {
-        applyComposeLayout(true);
-        // compose 页也需要侧边栏能力：折叠布局 + 贴左 + 折叠按钮（受宽松开关控制）
         if (looseLayout) {
+          applyComposeLayout(true);
           applyArticleLayout(navCollapsed);
           setNavSnug(true);
         } else {
+          applyComposeLayout(false);
           applyArticleLayout(false);
           setNavSnug(false);
         }
